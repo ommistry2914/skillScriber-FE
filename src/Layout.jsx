@@ -34,7 +34,7 @@ export default function Layout() {
             {currentRoute ? currentRoute.title : ""}
           </h1>
         </header>
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden p-5">
           <Outlet/>
         </div>
       </SidebarInset>
