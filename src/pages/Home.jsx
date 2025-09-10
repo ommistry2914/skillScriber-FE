@@ -6,15 +6,23 @@ import {
   AlertCircle,
   Loader2,
   X,
+  Download,
+  FileDown,
+  Plus,
 } from "lucide-react";
-import React, { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import docsService from "@/services/docs/docs.service";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Table, TableBody,TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const Home = () => {
   const [jobDescription, setJobDescription] = useState(null);
   const [resumes, setResumes] = useState([]);
   const [error, setError] = useState(null);
+  const [dragActive, setDragActive] = useState({ job: false, resume: false });
 
   // Refs for file inputs
   const jobDescriptionInputRef = useRef(null);
@@ -44,8 +52,8 @@ const Home = () => {
     },
   });
 
-  const handleJobDescriptionChange = (e) => {
-    const file = e.target.files[0];
+  const handleJobDescriptionChange = (files) => {
+    const file = files[0];
     if (file) {
       // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
@@ -57,8 +65,7 @@ const Home = () => {
       // Check file type
       if (
         file.type === "application/pdf" ||
-        file.type ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
         file.type === "application/msword"
       ) {
         setJobDescription(file);
@@ -70,47 +77,50 @@ const Home = () => {
     }
   };
 
-  const handleResumeChange = (e) => {
-    const files = Array.from(e.target.files);
+  const handleResumeChange = (newFiles) => {
+    // Convert FileList to Array and combine with existing resumes
+    const files = Array.from(newFiles);
+    const combinedFiles = [...resumes, ...files];
 
-    // Check number of files
-    if (files.length > 3) {
+    // Check total number of files
+    if (combinedFiles.length > 3) {
       setError("Maximum 3 resumes allowed");
       return;
     }
 
     // Check file sizes and types
-    const invalidSizeFiles = files.filter(
-      (file) => file.size > 5 * 1024 * 1024
-    );
+    const invalidSizeFiles = files.filter(file => file.size > 5 * 1024 * 1024);
     if (invalidSizeFiles.length > 0) {
-      setError(
-        `File size too large: ${invalidSizeFiles
-          .map((f) => f.name)
-          .join(", ")}. Maximum 5MB per file.`
-      );
+      setError(`File size too large: ${invalidSizeFiles.map(f => f.name).join(", ")}. Maximum 5MB per file.`);
       return;
     }
 
-    const validFiles = files.filter(
-      (file) =>
-        file.type === "application/pdf" ||
-        file.type ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-        file.type === "application/msword"
+    const validFiles = files.filter(file =>
+      file.type === "application/pdf" ||
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      file.type === "application/msword"
     );
 
     if (validFiles.length !== files.length) {
-      const invalidFiles = files.filter((file) => !validFiles.includes(file));
-      setError(
-        `Invalid file types: ${invalidFiles
-          .map((f) => f.name)
-          .join(", ")}. Only PDF and DOCX files allowed.`
-      );
+      const invalidFiles = files.filter(file => !validFiles.includes(file));
+      setError(`Invalid file types: ${invalidFiles.map(f => f.name).join(", ")}. Only PDF and DOCX files allowed.`);
       return;
     }
 
-    setResumes(validFiles);
+    // Check for duplicate files
+    const newValidFiles = validFiles.filter(newFile => 
+      !resumes.some(existingFile => 
+        existingFile.name === newFile.name && 
+        existingFile.size === newFile.size
+      )
+    );
+
+    if (newValidFiles.length === 0) {
+      setError("No new files to add. Files may already be uploaded or invalid.");
+      return;
+    }
+
+    setResumes(prev => [...prev, ...newValidFiles]);
     setError(null);
   };
 
@@ -122,9 +132,7 @@ const Home = () => {
   };
 
   const removeResume = (indexToRemove) => {
-    const updatedResumes = resumes.filter(
-      (_, index) => index !== indexToRemove
-    );
+    const updatedResumes = resumes.filter((_, index) => index !== indexToRemove);
     setResumes(updatedResumes);
 
     if (updatedResumes.length === 0 && resumesInputRef.current) {
@@ -170,9 +178,34 @@ const Home = () => {
     uploadMutation.reset();
   };
 
+  // Drag and drop handlers
+  const handleDrag = useCallback((e, type) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(prev => ({ ...prev, [type]: true }));
+    } else if (e.type === "dragleave") {
+      setDragActive(prev => ({ ...prev, [type]: false }));
+    }
+  }, []);
+
+  const handleDrop = useCallback((e, type) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(prev => ({ ...prev, [type]: false }));
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      if (type === 'job') {
+        handleJobDescriptionChange(e.dataTransfer.files);
+      } else {
+        handleResumeChange(e.dataTransfer.files);
+      }
+    }
+  }, [resumes]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Job Resume Matcher
@@ -182,248 +215,315 @@ const Home = () => {
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-xl p-8">
-          <div className="space-y-8">
-            {/* Job Description Upload */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
-              <div className="flex items-center justify-center mb-4">
-                <FileText className="h-12 w-12 text-blue-500" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Upload Job Description
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Select a PDF or DOCX file containing the job description (Max
-                  5MB)
+        {/* Upload Section - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Job Description Upload */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-xl">
+                <FileText className="h-6 w-6 text-blue-500" />
+                <span>Job Description</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-6 transition-all duration-300 text-center ${
+                  dragActive.job 
+                    ? 'border-blue-500 bg-blue-50 border-solid' 
+                    : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/30'
+                }`}
+                onDragEnter={(e) => handleDrag(e, 'job')}
+                onDragLeave={(e) => handleDrag(e, 'job')}
+                onDragOver={(e) => handleDrag(e, 'job')}
+                onDrop={(e) => handleDrop(e, 'job')}
+              >
+                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-700 font-medium mb-2">
+                  Drag & drop your job description here
                 </p>
+                <p className="text-gray-500 text-sm mb-4">
+                  or click to browse files
+                </p>
+                <p className="text-xs text-gray-400 mb-4">
+                  PDF or DOCX files only (Max 5MB)
+                </p>
+                
                 <input
                   ref={jobDescriptionInputRef}
                   type="file"
                   accept=".pdf,.docx,.doc"
-                  onChange={handleJobDescriptionChange}
-                  className="block w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-blue-50 file:text-blue-700
-                    hover:file:bg-blue-100
-                    file:cursor-pointer cursor-pointer"
+                  onChange={(e) => handleJobDescriptionChange(e.target.files)}
+                  className="hidden"
                 />
+                
+                <Button 
+                  variant="outline" 
+                  onClick={() => jobDescriptionInputRef.current?.click()}
+                  disabled={uploadMutation.isPending}
+                  className="mb-4"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Browse Files
+                </Button>
+                
                 {jobDescription && (
-                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                        <span className="text-sm font-medium text-green-800">
-                          {jobDescription.name}
-                        </span>
-                        <span className="text-sm text-green-600">
-                          ({formatFileSize(jobDescription.size)})
-                        </span>
+                      <div className="flex items-center space-x-3 flex-1">
+                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-green-800 truncate">
+                            {jobDescription.name}
+                          </p>
+                          <p className="text-xs text-green-600">
+                            {formatFileSize(jobDescription.size)}
+                          </p>
+                        </div>
                       </div>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={removeJobDescription}
-                        className="text-green-600 hover:text-green-800 transition-colors"
+                        disabled={uploadMutation.isPending}
+                        className="text-green-600 hover:text-green-800 h-8 w-8"
                       >
                         <X className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Resume Upload */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-green-400 transition-colors">
-              <div className="flex items-center justify-center mb-4">
-                <Users className="h-12 w-12 text-green-500" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Upload Resumes
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Select 1-3 PDF or DOCX resume files (Max 5MB each)
+          {/* Resume Upload */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between text-xl">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-6 w-6 text-green-500" />
+                  <span>Resumes</span>
+                </div>
+                <span className="text-sm font-normal text-gray-500">
+                  {resumes.length}/3 files
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-6 transition-all duration-300 text-center ${
+                  dragActive.resume 
+                    ? 'border-green-500 bg-green-50 border-solid' 
+                    : 'border-gray-300 hover:border-green-400 hover:bg-green-50/30'
+                }`}
+                onDragEnter={(e) => handleDrag(e, 'resume')}
+                onDragLeave={(e) => handleDrag(e, 'resume')}
+                onDragOver={(e) => handleDrag(e, 'resume')}
+                onDrop={(e) => handleDrop(e, 'resume')}
+              >
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-700 font-medium mb-2">
+                  Drag & drop resumes here
                 </p>
+                <p className="text-gray-500 text-sm mb-4">
+                  or click to browse files
+                </p>
+                <p className="text-xs text-gray-400 mb-4">
+                  PDF or DOCX files only (Max 5MB each, 3 files max)
+                </p>
+                
                 <input
                   ref={resumesInputRef}
                   type="file"
                   accept=".pdf,.docx,.doc"
                   multiple
-                  onChange={handleResumeChange}
-                  className="block w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-green-50 file:text-green-700
-                    hover:file:bg-green-100
-                    file:cursor-pointer cursor-pointer"
+                  onChange={(e) => handleResumeChange(e.target.files)}
+                  className="hidden"
                 />
+                
+                <Button 
+                  variant="outline" 
+                  onClick={() => resumesInputRef.current?.click()}
+                  disabled={resumes.length >= 3 || uploadMutation.isPending}
+                  className="mb-4"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {resumes.length === 0 ? 'Add Resumes' : 'Add More Resumes'}
+                </Button>
+                
                 {resumes.length > 0 && (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-4 space-y-3">
                     {resumes.map((resume, index) => (
-                      <div
-                        key={index}
-                        className="p-3 bg-green-50 border border-green-200 rounded-lg"
-                      >
+                      <div key={index} className="p-4 bg-green-50 border border-green-200 rounded-lg">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                            <span className="text-sm font-medium text-green-800">
-                              {resume.name}
-                            </span>
-                            <span className="text-sm text-green-600">
-                              ({formatFileSize(resume.size)})
-                            </span>
+                          <div className="flex items-center space-x-3 flex-1">
+                            <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-green-800 truncate">
+                                {resume.name}
+                              </p>
+                              <p className="text-xs text-green-600">
+                                {formatFileSize(resume.size)}
+                              </p>
+                            </div>
                           </div>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => removeResume(index)}
-                            className="text-green-600 hover:text-green-800 transition-colors"
+                            disabled={uploadMutation.isPending}
+                            className="text-green-600 hover:text-green-800 h-8 w-8"
                           >
                             <X className="h-4 w-4" />
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
-                    <p className="text-sm text-gray-500 mt-2">
-                      {resumes.length}/3 resumes selected
-                    </p>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-start space-x-2">
-                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                  <div className="flex-1">
-                    <span className="text-red-800 font-medium">{error}</span>
-                  </div>
-                  <button
-                    onClick={() => setError(null)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Upload Mutation Error */}
-            {uploadMutation.isError && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-start space-x-2">
-                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                  <div className="flex-1">
-                    <span className="text-red-800 font-medium">
-                      {uploadMutation.error.message}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => uploadMutation.reset()}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Success Message */}
-            {uploadMutation.isSuccess && (
-              <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                    <h3 className="text-lg font-semibold text-green-800">
-                      Upload Successful!
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => uploadMutation.reset()}
-                    className="text-green-600 hover:text-green-800"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* Candidate Reports Section */}
-                <div className="space-y-4">
-                  {uploadMutation.data.reports.map((report, index) => (
-                    <div
-                      key={index}
-                      className="p-4 bg-white border border-green-300 rounded-lg shadow-sm"
-                    >
-                      <h4 className="font-semibold text-green-900 mb-2">
-                        {report.candidateName}
-                      </h4>
-                      <div className="flex space-x-3">
-                        <a
-                          href={report.s3Files.docx}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
-                        >
-                          Download DOCX
-                        </a>
-                        <a
-                          href={report.s3Files.pdf}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition"
-                        >
-                          Download PDF
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={handleSubmit}
-                disabled={
-                  !jobDescription ||
-                  resumes.length === 0 ||
-                  uploadMutation.isPending
-                }
-                className="inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                {uploadMutation.isPending ? (
-                  <>
-                    <Loader2 className="animate-spin h-5 w-5 mr-2" />
-                    Processing Files...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-5 w-5 mr-2" />
-                    Upload & Process Files
-                  </>
-                )}
-              </button>
-
-              {(jobDescription ||
-                resumes.length > 0 ||
-                uploadMutation.isSuccess ||
-                error ||
-                uploadMutation.isError) && (
-                <button
-                  onClick={resetForm}
-                  disabled={uploadMutation.isPending}
-                  className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Reset Form
-                </button>
-              )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Error Messages */}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{error}</span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setError(null)}
+                className="h-6 w-6 text-red-600 hover:text-red-800"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {uploadMutation.isError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{uploadMutation.error?.message || "Upload failed. Please try again."}</span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => uploadMutation.reset()}
+                className="h-6 w-6 text-red-600 hover:text-red-800"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row justify-center items-center space-y-3 sm:space-y-0 sm:space-x-4 mb-8">
+          <Button
+            onClick={handleSubmit}
+            disabled={!jobDescription || resumes.length === 0 || uploadMutation.isPending}
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            {uploadMutation.isPending ? (
+              <>
+                <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                Processing Files...
+              </>
+            ) : (
+              <>
+                <Upload className="h-5 w-5 mr-2" />
+                Upload & Process Files
+              </>
+            )}
+          </Button>
+
+          {(jobDescription || resumes.length > 0 || uploadMutation.isSuccess || error || uploadMutation.isError) && (
+            <Button
+              variant="outline"
+              onClick={resetForm}
+              disabled={uploadMutation.isPending}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              Reset Form
+            </Button>
+          )}
+        </div>
+
+        {/* Results Table */}
+        {uploadMutation.isSuccess && uploadMutation.data && (
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-xl">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+                <span>Processing Complete!</span>
+              </CardTitle>
+              <p className="text-gray-600">
+                Your job-resume matching analysis is ready. Download the reports below:
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="w-20 font-semibold text-gray-900">Sr. No.</TableHead>
+                      <TableHead className="font-semibold text-gray-900">Candidate Name</TableHead>
+                      <TableHead className="text-center font-semibold text-gray-900 min-w-[200px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {uploadMutation.data.reports.map((report, index) => (
+                      <TableRow key={index} className="hover:bg-gray-50">
+                        <TableCell className="font-medium text-gray-900">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell className="font-medium text-gray-900">
+                          {report.candidateName}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(report.s3Files.docx, '_blank')}
+                              className="flex items-center justify-center min-w-[100px]"
+                            >
+                              <FileDown className="h-4 w-4 mr-2" />
+                              DOCX
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(report.s3Files.pdf, '_blank')}
+                              className="flex items-center justify-center min-w-[100px] text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              PDF
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {/* Summary */}
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800">
+                  <strong>Summary:</strong> Successfully processed {resumes.length} resume{resumes.length > 1 ? 's' : ''} against the job description. 
+                  All reports are available for download in both DOCX and PDF formats.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
