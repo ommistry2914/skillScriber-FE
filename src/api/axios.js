@@ -106,18 +106,39 @@ axiosInstance.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Handle refresh manually here or leave blank if not implemented
-        throw new Error("Token refresh not implemented");
+        const refreshToken = TokenStorage.getRefreshToken();
 
+        if (!refreshToken) {
+          throw new Error("No refresh token available");
+        }
+
+        const response = await axios.post(`${BASE_URL}/auth/refresh-token`, {
+          refreshToken,
+        });
+
+        const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+        TokenStorage.setAccessToken(accessToken);
+        TokenStorage.setRefreshToken(newRefreshToken);
+
+        onTokenRefreshed(accessToken);
+
+        originalRequest.headers["Authorization"] = `Bearer ${accessToken}`;
+        return axiosInstance(originalRequest);
       } catch (refreshError) {
+        toast.error("Session expired. Please log in again.");
         TokenStorage.clearTokens();
         refreshSubscribers = [];
-        toast.error("Session expired. Please log in again.");
         window.location.href = "/login";
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
+    }
+
+    if (error.response?.status === 401) {
+      TokenStorage.clearTokens();
+      window.location.href = "/login";
     }
 
     if (error.response) {

@@ -21,6 +21,31 @@ export const login = createAsyncThunk(
   }
 );
 
+export const refreshTokens = createAsyncThunk(
+  "auth/refreshTokens",
+  async (_, { rejectWithValue }) => {
+    try {
+      const refreshToken = TokenStorage.getRefreshToken();
+      const response = await axiosInstance.post("/auth/refresh-token", {
+        refreshToken,
+      });
+      
+      const { accessToken, refreshToken: newRefreshToken, user } = response.data;
+
+      TokenStorage.setAccessToken(accessToken);
+      TokenStorage.setRefreshToken(newRefreshToken);
+      TokenStorage.setUser(user);
+
+      return { accessToken, refreshToken: newRefreshToken, user };
+    } catch (error) {
+      TokenStorage.clearTokens();
+      return rejectWithValue(
+        error.response?.data?.message || "Session expired. Please log in again."
+      );
+    }
+  }
+);
+
 export const logout = createAsyncThunk("auth/logout", async () => {
   TokenStorage.clearTokens();
   return true;
@@ -60,6 +85,20 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload || "Login failed";
       })
+
+      .addCase(refreshTokens.fulfilled, (state, action) => {
+        state.user = action.payload.user;
+        state.accessToken = action.payload.accessToken;
+        state.refreshToken = action.payload.refreshToken;
+        state.isAuthenticated = true;
+      })
+      .addCase(refreshTokens.rejected, (state) => {
+        state.user = null;
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.isAuthenticated = false;
+      })
+      
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
         state.accessToken = null;
