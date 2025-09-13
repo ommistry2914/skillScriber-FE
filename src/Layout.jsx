@@ -24,7 +24,7 @@ export default function Layout() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 sticky top-0 bg-white">
           <SidebarTrigger className="-ml-1" />
           <Separator
             orientation="vertical"
@@ -34,7 +34,7 @@ export default function Layout() {
             {currentRoute ? currentRoute.title : ""}
           </h1>
         </header>
-        <div className="flex flex-1 flex-col overflow-hidden p-5">
+        <div className="flex flex-1 flex-col overflow-y-auto p-5">
           <Outlet/>
         </div>
       </SidebarInset>

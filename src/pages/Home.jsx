@@ -204,16 +204,16 @@ const Home = () => {
   }, [resumes]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+    <div className="min-h-screen border-2 border-gray-200 rounded-lg py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8">
+        {/* <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
             Job Resume Matcher
           </h1>
           <p className="text-lg text-gray-600">
             Upload job descriptions and resumes for intelligent matching
           </p>
-        </div>
+        </div> */}
 
         {/* Upload Section - Side by Side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -269,9 +269,9 @@ const Home = () => {
                 {jobDescription && (
                   <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3 flex-1">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
                         <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 overflow-hidden">
                           <p className="text-sm font-medium text-green-800 truncate">
                             {jobDescription.name}
                           </p>
@@ -356,9 +356,9 @@ const Home = () => {
                     {resumes.map((resume, index) => (
                       <div key={index} className="p-4 bg-green-50 border border-green-200 rounded-lg">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3 flex-1">
+                          <div className="flex items-center space-x-3 flex-1 min-w-0">
                             <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 overflow-hidden">
                               <p className="text-sm font-medium text-green-800 truncate">
                                 {resume.name}
                               </p>
@@ -515,12 +515,12 @@ const Home = () => {
               </div>
               
               {/* Summary */}
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              {/* <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-800">
                   <strong>Summary:</strong> Successfully processed {resumes.length} resume{resumes.length > 1 ? 's' : ''} against the job description. 
                   All reports are available for download in both DOCX and PDF formats.
                 </p>
-              </div>
+              </div> */}
             </CardContent>
           </Card>
         )}
